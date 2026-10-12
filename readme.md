@@ -1,7 +1,7 @@
 # Letterboxd List Syncer
 
 A small Rust service that mirrors a public Letterboxd list into a list owned by
-your account. GitHub Actions runs it once an hour. Additions, removals, and order
+your account. GitHub Actions runs it every six hours. Additions, removals, and order
 changes in the source are copied to the target.
 
 This repository is configured to mirror
@@ -62,8 +62,8 @@ cargo run
 The dry run only reads the public source lists. The normal run uses the session
 cookies to create or update lists owned by `username`.
 
-GitHub Actions runs at minute `17` of every hour and can also be started from
-the Actions tab. Concurrent runs are serialized.
+GitHub Actions runs every six hours at minute `17` (UTC) and can also be started
+from the Actions tab. Concurrent runs are serialized.
 
 ## Caveat
 
