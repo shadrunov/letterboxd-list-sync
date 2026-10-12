@@ -48,6 +48,13 @@ impl Config {
 }
 
 impl ListPair {
+    pub fn source_username(&self) -> &str {
+        self.source
+            .path_segments()
+            .and_then(|mut segments| segments.next())
+            .expect("validated source URL has a username")
+    }
+
     pub fn target_url(&self, username: &str) -> Url {
         Url::parse(&format!(
             "https://letterboxd.com/{username}/list/{}/",
@@ -109,6 +116,7 @@ lists:
         .unwrap();
         config.validate().unwrap();
         assert_eq!(config.lists.len(), 2);
+        assert_eq!(config.lists[1].source_username(), "bob");
         assert_eq!(
             config.lists[1].target_url(&config.username).as_str(),
             "https://letterboxd.com/shadrunov/list/aa-vampire-season/"

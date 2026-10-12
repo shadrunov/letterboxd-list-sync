@@ -16,7 +16,7 @@ use url::Url;
 const API_BASE: &str = "https://api.letterboxd.com/api/v0";
 const WEBSITE: &str = "https://letterboxd.com";
 const USER_AGENT: &str =
-    "letterboxd-list-sync/0.1 (+https://github.com/shadrunov/letterboxd-list-sync)";
+    "letterboxd-list-syncer/0.1 (+https://github.com/shadrunov/letterboxd-list-syncer)";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Film {

@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: letterboxd-list-sync
+  group: letterboxd-list-syncer
   cancel-in-progress: false
 
 jobs:

@@ -1,4 +1,4 @@
-# Letterboxd List Sync
+# Letterboxd List Syncer
 
 A small Rust service that mirrors a public Letterboxd list into a list owned by
 your account. GitHub Actions runs it once an hour. Additions, removals, and order
@@ -25,8 +25,10 @@ missing target is created on the first successful run. Later runs find it by
 name, so Letterboxd-generated slug suffixes do not create duplicates.
 
 Mirrored lists are always public and unranked. The source description is copied,
-then `synced from <source URL>` is appended on a separate paragraph. If the
-source has no description, the sync line is the complete target description.
+then `synced from [<source username>'s list](<source URL>) by
+[letterboxd-list-syncer](https://github.com/shadrunov/letterboxd-list-syncer)` is
+appended as a separate paragraph. If the source has no description, this credit
+is the complete target description.
 
 ## Authentication
 

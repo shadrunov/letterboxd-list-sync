@@ -638,7 +638,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "letterboxd-list-sync"
+name = "letterboxd-list-syncer"
 version = "0.1.0"
 dependencies = [
  "anyhow",

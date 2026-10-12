@@ -7,6 +7,9 @@ use anyhow::Result;
 use clap::Parser;
 use config::Config;
 use letterboxd::LetterboxdClient;
+use url::Url;
+
+const REPOSITORY_URL: &str = "https://github.com/shadrunov/letterboxd-list-syncer";
 
 #[derive(Debug, Parser)]
 #[command(version, about)]
@@ -35,11 +38,8 @@ async fn main() -> Result<()> {
                 .await?
                 .unwrap_or_else(|| pair.target_url(&config.username))
         };
-        let description = if source.description.is_empty() {
-            format!("synced from {}", pair.source)
-        } else {
-            format!("{}\n\nsynced from {}", source.description, pair.source)
-        };
+        let description =
+            sync_description(&source.description, pair.source_username(), &pair.source);
         println!(
             "{} -> {} ({} films)",
             pair.source,
@@ -73,4 +73,30 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+fn sync_description(source_description: &str, source_username: &str, source_url: &Url) -> String {
+    let credit = format!(
+        "synced from [{source_username}'s list]({source_url}) by [letterboxd-list-syncer]({REPOSITORY_URL})"
+    );
+    if source_description.is_empty() {
+        credit
+    } else {
+        format!("{source_description}\n\n{credit}")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn appends_linked_sync_credit() {
+        let source =
+            Url::parse("https://letterboxd.com/cokewithglitter/list/aa-vampire-season/").unwrap();
+        assert_eq!(
+            sync_description("Original description", "cokewithglitter", &source),
+            "Original description\n\nsynced from [cokewithglitter's list](https://letterboxd.com/cokewithglitter/list/aa-vampire-season/) by [letterboxd-list-syncer](https://github.com/shadrunov/letterboxd-list-syncer)"
+        );
+    }
 }
