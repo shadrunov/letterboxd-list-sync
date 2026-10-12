@@ -1,8 +1,14 @@
-use std::{collections::HashSet, env, time::Duration};
+use std::{
+    collections::HashSet,
+    env,
+    io::Write,
+    process::{Command, Stdio},
+    time::Duration,
+};
 
 use anyhow::{Context, Result, anyhow, bail};
 use regex::Regex;
-use reqwest::{Client, StatusCode, header};
+use reqwest::{Client, StatusCode};
 use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -29,7 +35,7 @@ pub struct TargetList {
 #[derive(Clone)]
 pub struct LetterboxdClient {
     http: Client,
-    cookie_header: Option<String>,
+    user_cookie: Option<String>,
     csrf: Option<String>,
 }
 
@@ -95,13 +101,10 @@ impl LetterboxdClient {
     pub fn from_env() -> Result<Self> {
         let user_cookie = env::var("LETTERBOXD_USER_COOKIE").ok();
         let csrf = env::var("LETTERBOXD_CSRF_COOKIE").ok();
-        let cookie_header = match (&user_cookie, &csrf) {
-            (Some(user), Some(csrf)) => Some(format!(
-                "letterboxd.user={user}; com.xk72.webparts.csrf={csrf}"
-            )),
-            (None, None) => None,
+        match (&user_cookie, &csrf) {
+            (Some(_), Some(_)) | (None, None) => {}
             _ => bail!("LETTERBOXD_USER_COOKIE and LETTERBOXD_CSRF_COOKIE must be set together"),
-        };
+        }
 
         let http = Client::builder()
             .user_agent(USER_AGENT)
@@ -112,7 +115,7 @@ impl LetterboxdClient {
 
         Ok(Self {
             http,
-            cookie_header,
+            user_cookie,
             csrf,
         })
     }
@@ -159,18 +162,10 @@ impl LetterboxdClient {
     }
 
     pub async fn verify_session(&self, expected_username: &str) -> Result<()> {
-        let cookie = self
-            .cookie_header
-            .as_deref()
-            .context("Letterboxd session cookies are not configured")?;
-        let response = self
-            .http
-            .get(format!("{BASE}/"))
-            .header(header::COOKIE, cookie)
-            .send()
-            .await?
-            .error_for_status()?;
-        let html = response.text().await?;
+        let (status, html) = self.authenticated_request("GET", &format!("{BASE}/"), None)?;
+        if !status.is_success() {
+            bail!("Letterboxd session check failed with HTTP {status}");
+        }
         let username = parse_logged_in_username(&html)
             .context("Letterboxd rejected the session cookies; refresh the GitHub secrets")?;
         if !username.eq_ignore_ascii_case(expected_username) {
@@ -182,24 +177,14 @@ impl LetterboxdClient {
     }
 
     pub async fn inspect_target(&self, target_url: &Url) -> Result<Option<TargetList>> {
-        let cookie = self
-            .cookie_header
-            .as_deref()
-            .context("Letterboxd session cookies are not configured")?;
         let edit_url = target_url.join("edit/")?;
-        let response = self
-            .http
-            .get(edit_url.clone())
-            .header(header::COOKIE, cookie)
-            .send()
-            .await?;
-        if response.status() == StatusCode::NOT_FOUND {
+        let (status, html) = self.authenticated_request("GET", edit_url.as_str(), None)?;
+        if status == StatusCode::NOT_FOUND {
             return Ok(None);
         }
-        let response = response
-            .error_for_status()
-            .with_context(|| format!("failed to inspect {edit_url}"))?;
-        let html = response.text().await?;
+        if !status.is_success() {
+            bail!("failed to inspect {edit_url}: HTTP {status}");
+        }
         parse_target_list(&html).map(Some)
     }
 
@@ -262,27 +247,9 @@ impl LetterboxdClient {
         payload: &T,
     ) -> Result<SavedList> {
         let method = reqwest::Method::from_bytes(method.as_bytes())?;
-        let cookie = self
-            .cookie_header
-            .as_deref()
-            .context("Letterboxd session cookies are not configured")?;
-        let csrf = self
-            .csrf
-            .as_deref()
-            .context("Letterboxd CSRF cookie is not configured")?;
-        let request = self
-            .http
-            .request(method, format!("{API_BASE}{path}"))
-            .header(header::ORIGIN, BASE)
-            .header(header::REFERER, format!("{BASE}/"))
-            .header(header::ACCEPT, "application/json")
-            .header(header::COOKIE, cookie)
-            .header("x-csrf-token", csrf)
-            .json(payload);
-
-        let response = request.send().await?;
-        let status = response.status();
-        let body = response.text().await?;
+        let body = serde_json::to_string(payload)?;
+        let (status, body) =
+            self.authenticated_request(method.as_str(), &format!("{API_BASE}{path}"), Some(&body))?;
         if status == StatusCode::UNAUTHORIZED {
             bail!("Letterboxd authentication expired or cannot authorize API writes (HTTP 401)");
         }
@@ -312,6 +279,85 @@ impl LetterboxdClient {
             .context("Letterboxd returned success without list data")?;
         eprintln!("Saved '{}' (LID {})", saved.name, saved.id);
         Ok(saved)
+    }
+
+    fn authenticated_request(
+        &self,
+        method: &str,
+        url: &str,
+        body: Option<&str>,
+    ) -> Result<(StatusCode, String)> {
+        let user_cookie = self
+            .user_cookie
+            .as_deref()
+            .context("Letterboxd session cookies are not configured")?;
+        let csrf = self
+            .csrf
+            .as_deref()
+            .context("Letterboxd CSRF cookie is not configured")?;
+        let binary = env::var("CURL_IMPERSONATE").unwrap_or_else(|_| "curl_chrome136".into());
+        let mut command = Command::new(binary);
+        command
+            .args([
+                "--silent",
+                "--show-error",
+                "--location",
+                "--max-time",
+                "30",
+                "--variable",
+                "%LETTERBOXD_USER_COOKIE",
+                "--variable",
+                "%LETTERBOXD_CSRF_COOKIE",
+                "--expand-header",
+                "Cookie: letterboxd.user={{LETTERBOXD_USER_COOKIE}}; com.xk72.webparts.csrf={{LETTERBOXD_CSRF_COOKIE}}",
+                "--expand-header",
+                "x-csrf-token: {{LETTERBOXD_CSRF_COOKIE}}",
+                "--header",
+                "Origin: https://letterboxd.com",
+                "--header",
+                "Referer: https://letterboxd.com/",
+                "--header",
+                "Accept: application/json",
+                "--write-out",
+                "\n__HTTP_STATUS__:%{http_code}",
+                "--request",
+                method,
+                url,
+            ])
+            .env("LETTERBOXD_USER_COOKIE", user_cookie)
+            .env("LETTERBOXD_CSRF_COOKIE", csrf)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        if body.is_some() {
+            command
+                .args(["--header", "Content-Type: application/json; charset=UTF-8"])
+                .args(["--data-binary", "@-"])
+                .stdin(Stdio::piped());
+        }
+
+        let mut child = command
+            .spawn()
+            .context("curl_chrome136 is required for authenticated Letterboxd requests")?;
+        if let Some(body) = body {
+            child
+                .stdin
+                .take()
+                .context("failed to open curl stdin")?
+                .write_all(body.as_bytes())?;
+        }
+        let output = child.wait_with_output()?;
+        if !output.status.success() {
+            bail!(
+                "authenticated request failed: {}",
+                compact(&String::from_utf8_lossy(&output.stderr))
+            );
+        }
+        let output = String::from_utf8(output.stdout).context("curl returned invalid text")?;
+        let (body, status) = output
+            .rsplit_once("\n__HTTP_STATUS__:")
+            .context("curl response did not contain an HTTP status")?;
+        let status = StatusCode::from_u16(status.trim().parse()?)?;
+        Ok((status, body.to_owned()))
     }
 }
 
