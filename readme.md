@@ -25,10 +25,9 @@ missing target is created on the first successful run. Later runs find it by
 name, so Letterboxd-generated slug suffixes do not create duplicates.
 
 Mirrored lists are always public and unranked. The source description is copied,
-then `synced from [<source username>'s list](<source URL>) by
-[letterboxd-list-syncer](https://github.com/shadrunov/letterboxd-list-syncer)` is
-appended as a separate paragraph. If the source has no description, this credit
-is the complete target description.
+then “synced from source user's list by letterboxd-list-syncer” is appended as a
+separate paragraph, with links to the source and this repository. If the source
+has no description, this credit is the complete target description.
 
 ## Authentication
 

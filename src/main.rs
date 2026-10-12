@@ -77,7 +77,7 @@ async fn main() -> Result<()> {
 
 fn sync_description(source_description: &str, source_username: &str, source_url: &Url) -> String {
     let credit = format!(
-        "synced from [{source_username}'s list]({source_url}) by [letterboxd-list-syncer]({REPOSITORY_URL})"
+        "synced from <a href=\"{source_url}\">{source_username}'s list</a> by <a href=\"{REPOSITORY_URL}\">letterboxd-list-syncer</a>"
     );
     if source_description.is_empty() {
         credit
@@ -96,7 +96,7 @@ mod tests {
             Url::parse("https://letterboxd.com/cokewithglitter/list/aa-vampire-season/").unwrap();
         assert_eq!(
             sync_description("Original description", "cokewithglitter", &source),
-            "Original description\n\nsynced from [cokewithglitter's list](https://letterboxd.com/cokewithglitter/list/aa-vampire-season/) by [letterboxd-list-syncer](https://github.com/shadrunov/letterboxd-list-syncer)"
+            "Original description\n\nsynced from <a href=\"https://letterboxd.com/cokewithglitter/list/aa-vampire-season/\">cokewithglitter's list</a> by <a href=\"https://github.com/shadrunov/letterboxd-list-syncer\">letterboxd-list-syncer</a>"
         );
     }
 }
