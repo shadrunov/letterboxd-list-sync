@@ -16,17 +16,17 @@ source:
   url: https://letterboxd.com/cokewithglitter/list/aa-vampire-season/
 
 target:
-  username: YOUR_USERNAME
+  username: shadrunov
   url: null
   name: "a&a: vampire season"
   slug: aa-vampire-season
-  public: true
-  ranked: false
 ```
 
 If `target.url` is `null`, the first successful run creates the list. Later
 runs find it from `username` and `slug`. You may instead create an empty list
 yourself and put its full URL in `target.url`.
+
+Mirrored lists are always public and unranked.
 
 ## Authentication
 

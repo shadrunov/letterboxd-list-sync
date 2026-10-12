@@ -21,14 +21,6 @@ pub struct Target {
     pub url: Option<Url>,
     pub name: String,
     pub slug: String,
-    #[serde(default = "default_true")]
-    pub public: bool,
-    #[serde(default)]
-    pub ranked: bool,
-}
-
-fn default_true() -> bool {
-    true
 }
 
 impl Config {
@@ -72,13 +64,6 @@ impl Config {
             ))
             .expect("validated username and slug form a URL")
         })
-    }
-
-    pub fn ensure_target_configured(&self) -> Result<()> {
-        if self.target.username == "YOUR_USERNAME" {
-            bail!("set target.username in config.yaml");
-        }
-        Ok(())
     }
 }
 

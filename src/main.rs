@@ -36,30 +36,18 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
-    config.ensure_target_configured()?;
     client.verify_session(&config.target.username).await?;
     let target_url = config.target_url();
     match client.inspect_target(&target_url).await? {
         Some(target) => {
             client
-                .replace_list(
-                    &target,
-                    &config.target.name,
-                    config.target.public,
-                    config.target.ranked,
-                    &films,
-                )
+                .replace_list(&target, &config.target.name, true, false, &films)
                 .await?;
             println!("Updated {target_url}");
         }
         None => {
             client
-                .create_list(
-                    &config.target.name,
-                    config.target.public,
-                    config.target.ranked,
-                    &films,
-                )
+                .create_list(&config.target.name, true, false, &films)
                 .await?;
             println!("Created {target_url}");
         }

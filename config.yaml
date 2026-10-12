@@ -2,13 +2,9 @@ source:
   url: https://letterboxd.com/cokewithglitter/list/aa-vampire-season/
 
 target:
-  # Your Letterboxd username. Fill this in before enabling the workflow.
-  username: YOUR_USERNAME
+  username: shadrunov
   # Leave null on the first run: the service creates the list and then finds it by slug.
   # After creation you may pin the URL here if you prefer.
   url: null
   name: "a&a: vampire season"
   slug: aa-vampire-season
-  public: true
-  ranked: false
-
