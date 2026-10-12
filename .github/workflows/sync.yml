@@ -1,0 +1,28 @@
+name: Sync Letterboxd list
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: letterboxd-list-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Sync list
+        env:
+          LETTERBOXD_USER_COOKIE: ${{ secrets.LETTERBOXD_USER_COOKIE }}
+          LETTERBOXD_CSRF_COOKIE: ${{ secrets.LETTERBOXD_CSRF_COOKIE }}
+        run: cargo run --locked --release
+
