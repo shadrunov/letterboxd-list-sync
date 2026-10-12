@@ -55,8 +55,8 @@ cargo run -- --dry-run
 cargo run
 ```
 
-The dry run only reads the public source lists. The normal run validates that
-the session belongs to `username` before changing anything.
+The dry run only reads the public source lists. The normal run uses the session
+cookies to create or update lists owned by `username`.
 
 GitHub Actions runs at minute `17` of every hour and can also be started from
 the Actions tab. Concurrent runs are serialized.

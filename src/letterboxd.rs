@@ -7,14 +7,12 @@ use std::{
 };
 
 use anyhow::{Context, Result, anyhow, bail};
-use regex::Regex;
 use reqwest::{Client, StatusCode};
 use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use url::Url;
 
-const BASE: &str = "https://letterboxd.com";
 const API_BASE: &str = "https://api.letterboxd.com/api/v0";
 const USER_AGENT: &str =
     "letterboxd-list-sync/0.1 (+https://github.com/shadrunov/letterboxd-list-sync)";
@@ -159,29 +157,6 @@ impl LetterboxdClient {
             page += 1;
         }
         Ok(films)
-    }
-
-    pub async fn verify_session(&self, expected_username: &str) -> Result<()> {
-        let (status, html) = self.authenticated_request("GET", &format!("{BASE}/"), None)?;
-        if !status.is_success() {
-            bail!("Letterboxd session check failed with HTTP {status}");
-        }
-        if let Some(username) = parse_logged_in_username(&html) {
-            if !username.eq_ignore_ascii_case(expected_username) {
-                bail!(
-                    "configured username is {expected_username}, but the session belongs to {username}"
-                );
-            }
-            return Ok(());
-        }
-        if has_logged_in_marker(&html)
-            && html
-                .to_ascii_lowercase()
-                .contains(&expected_username.to_ascii_lowercase())
-        {
-            return Ok(());
-        }
-        bail!("Letterboxd rejected the session cookies; refresh the GitHub secrets")
     }
 
     pub async fn inspect_target(&self, target_url: &Url) -> Result<Option<TargetList>> {
@@ -423,27 +398,6 @@ fn has_next_page(html: &str) -> bool {
     document.select(&selector).next().is_some()
 }
 
-fn parse_logged_in_username(html: &str) -> Option<String> {
-    [
-        r#"(?s)username:\s*"([^"]+)".{0,500}?loggedIn:\s*true"#,
-        r#"(?s)"username"\s*:\s*"([^"]+)".{0,500}?"loggedIn"\s*:\s*true"#,
-        r#"(?s)loggedIn:\s*true.{0,500}?username:\s*"([^"]+)""#,
-        r#"(?s)"loggedIn"\s*:\s*true.{0,500}?"username"\s*:\s*"([^"]+)""#,
-    ]
-    .iter()
-    .find_map(|pattern| {
-        Regex::new(pattern)
-            .ok()?
-            .captures(html)?
-            .get(1)
-            .map(|value| value.as_str().to_owned())
-    })
-}
-
-fn has_logged_in_marker(html: &str) -> bool {
-    Regex::new(r#""?loggedIn"?\s*:\s*true"#).is_ok_and(|pattern| pattern.is_match(html))
-}
-
 fn parse_target_list(html: &str) -> Result<TargetList> {
     let document = Html::parse_document(html);
     let selector = Selector::parse("[data-component-class=ListEditor]")
@@ -481,15 +435,6 @@ mod tests {
         assert_eq!(films.len(), 2);
         assert_eq!(films[0].lid, "2b34");
         assert_eq!(films[1].slug, "draculas-daughter");
-    }
-
-    #[test]
-    fn parses_logged_in_user() {
-        let html = r#"person = { username: "Alice", loggedIn: true, role: "member" }"#;
-        assert_eq!(parse_logged_in_username(html).as_deref(), Some("Alice"));
-
-        let html = r#"{"loggedIn":true,"role":"member","username":"Bob"}"#;
-        assert_eq!(parse_logged_in_username(html).as_deref(), Some("Bob"));
     }
 
     #[test]

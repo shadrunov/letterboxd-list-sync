@@ -34,7 +34,6 @@ async fn main() -> Result<()> {
         }
 
         if !args.dry_run {
-            client.verify_session(&config.username).await?;
             match client.inspect_target(&target_url).await? {
                 Some(target) => {
                     client.replace_list(&target, &pair.target, &films).await?;
