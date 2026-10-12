@@ -9,14 +9,10 @@ description = "Mirror a public Letterboxd list into a list in your account"
 anyhow = "1.0"
 clap = { version = "4.5", features = ["derive"] }
 regex = "1.11"
-reqwest = { version = "0.12", default-features = false, features = ["cookies", "json", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 scraper = "0.24"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_yaml = "0.9"
 tokio = { version = "1.47", features = ["macros", "rt-multi-thread"] }
 url = { version = "2.5", features = ["serde"] }
-
-[dev-dependencies]
-httpmock = "0.8"
-tempfile = "3.21"

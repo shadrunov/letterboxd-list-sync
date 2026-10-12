@@ -4,23 +4,15 @@ use anyhow::{Context, Result, bail};
 use serde::Deserialize;
 use url::Url;
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct Config {
-    pub source: Source,
-    pub target: Target,
+    pub lists: Vec<ListPair>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
-pub struct Source {
-    pub url: Url,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct Target {
-    pub username: String,
-    pub url: Option<Url>,
-    pub name: String,
-    pub slug: String,
+#[derive(Debug, Deserialize)]
+pub struct ListPair {
+    pub source: Url,
+    pub target: Url,
 }
 
 impl Config {
@@ -34,42 +26,38 @@ impl Config {
     }
 
     fn validate(&self) -> Result<()> {
-        validate_letterboxd_url(&self.source.url, "source.url")?;
-        if let Some(url) = &self.target.url {
-            validate_letterboxd_url(url, "target.url")?;
+        if self.lists.is_empty() {
+            bail!("lists must contain at least one source/target pair");
         }
-        if self.target.username.trim().is_empty() {
-            bail!("target.username must not be empty");
-        }
-        if self.target.name.trim().is_empty() {
-            bail!("target.name must not be empty");
-        }
-        if self.target.slug.trim().is_empty()
-            || !self
-                .target
-                .slug
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || c == '-')
-        {
-            bail!("target.slug must contain only letters, numbers, and hyphens");
+        for (index, pair) in self.lists.iter().enumerate() {
+            validate_list_url(&pair.source, &format!("lists[{index}].source"))?;
+            validate_list_url(&pair.target, &format!("lists[{index}].target"))?;
         }
         Ok(())
     }
+}
 
-    pub fn target_url(&self) -> Url {
-        self.target.url.clone().unwrap_or_else(|| {
-            Url::parse(&format!(
-                "https://letterboxd.com/{}/list/{}/",
-                self.target.username, self.target.slug
-            ))
-            .expect("validated username and slug form a URL")
-        })
+impl ListPair {
+    pub fn target_username(&self) -> &str {
+        self.target
+            .path_segments()
+            .and_then(|mut parts| parts.next())
+            .expect("validated target URL has a username")
     }
 }
 
-fn validate_letterboxd_url(url: &Url, field: &str) -> Result<()> {
+fn validate_list_url(url: &Url, field: &str) -> Result<()> {
     if url.scheme() != "https" || url.host_str() != Some("letterboxd.com") {
         bail!("{field} must be an https://letterboxd.com URL");
+    }
+    let parts: Vec<_> = url
+        .path_segments()
+        .into_iter()
+        .flatten()
+        .filter(|part| !part.is_empty())
+        .collect();
+    if parts.len() != 3 || parts[1] != "list" {
+        bail!("{field} must have the form https://letterboxd.com/user/list/slug/");
     }
     Ok(())
 }
@@ -79,22 +67,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn derives_target_url() {
+    fn parses_multiple_url_pairs() {
         let config: Config = serde_yaml::from_str(
             r#"
-source:
-  url: https://letterboxd.com/a/list/b/
-target:
-  username: alice
-  name: Test
-  slug: test
+lists:
+  - source: https://letterboxd.com/alice/list/one/
+    target: https://letterboxd.com/shadrunov/list/one/
+  - source: https://letterboxd.com/bob/list/two/
+    target: https://letterboxd.com/shadrunov/list/two/
 "#,
         )
         .unwrap();
         config.validate().unwrap();
-        assert_eq!(
-            config.target_url().as_str(),
-            "https://letterboxd.com/alice/list/test/"
-        );
+        assert_eq!(config.lists.len(), 2);
+        assert_eq!(config.lists[0].target_username(), "shadrunov");
     }
 }

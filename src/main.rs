@@ -25,32 +25,37 @@ async fn main() -> Result<()> {
     let config = Config::load(&args.config)?;
     let client = LetterboxdClient::from_env()?;
 
-    let films = client.fetch_public_list(&config.source.url).await?;
-    println!("Source contains {} films", films.len());
-    for (index, film) in films.iter().enumerate() {
-        println!("{:>3}. {} [{}]", index + 1, film.name, film.slug);
+    for pair in &config.lists {
+        let source = client.fetch_public_list(&pair.source).await?;
+        println!(
+            "{} -> {} ({} films)",
+            pair.source,
+            pair.target,
+            source.films.len()
+        );
+        for (index, film) in source.films.iter().enumerate() {
+            println!("{:>3}. {} [{}]", index + 1, film.name, film.slug);
+        }
+
+        if !args.dry_run {
+            client.verify_session(pair.target_username()).await?;
+            match client.inspect_target(&pair.target).await? {
+                Some(target) => {
+                    client
+                        .replace_list(&target, &source.name, &source.films)
+                        .await?;
+                    println!("Updated {}", pair.target);
+                }
+                None => {
+                    client.create_list(&source.name, &source.films).await?;
+                    println!("Created {}", pair.target);
+                }
+            }
+        }
     }
 
     if args.dry_run {
-        println!("Dry run complete; target was not changed");
-        return Ok(());
-    }
-
-    client.verify_session(&config.target.username).await?;
-    let target_url = config.target_url();
-    match client.inspect_target(&target_url).await? {
-        Some(target) => {
-            client
-                .replace_list(&target, &config.target.name, true, false, &films)
-                .await?;
-            println!("Updated {target_url}");
-        }
-        None => {
-            client
-                .create_list(&config.target.name, true, false, &films)
-                .await?;
-            println!("Created {target_url}");
-        }
+        println!("Dry run complete; targets were not changed");
     }
 
     Ok(())

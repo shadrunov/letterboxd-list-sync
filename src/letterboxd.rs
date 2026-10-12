@@ -21,6 +21,12 @@ pub struct Film {
 }
 
 #[derive(Debug, Clone)]
+pub struct SourceList {
+    pub name: String,
+    pub films: Vec<Film>,
+}
+
+#[derive(Debug, Clone)]
 pub struct TargetList {
     pub lid: String,
     pub version: u64,
@@ -31,7 +37,6 @@ pub struct LetterboxdClient {
     http: Client,
     cookie_header: Option<String>,
     csrf: Option<String>,
-    api_token: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -96,8 +101,6 @@ impl LetterboxdClient {
     pub fn from_env() -> Result<Self> {
         let user_cookie = env::var("LETTERBOXD_USER_COOKIE").ok();
         let csrf = env::var("LETTERBOXD_CSRF_COOKIE").ok();
-        let api_token = env::var("LETTERBOXD_API_TOKEN").ok();
-
         let cookie_header = match (&user_cookie, &csrf) {
             (Some(user), Some(csrf)) => Some(format!(
                 "letterboxd.user={user}; com.xk72.webparts.csrf={csrf}"
@@ -117,24 +120,14 @@ impl LetterboxdClient {
             http,
             cookie_header,
             csrf,
-            api_token,
         })
     }
 
-    #[cfg(test)]
-    fn unauthenticated() -> Self {
-        Self {
-            http: Client::new(),
-            cookie_header: None,
-            csrf: None,
-            api_token: None,
-        }
-    }
-
-    pub async fn fetch_public_list(&self, url: &Url) -> Result<Vec<Film>> {
+    pub async fn fetch_public_list(&self, url: &Url) -> Result<SourceList> {
         let mut films = Vec::new();
         let mut seen = HashSet::new();
         let mut page = 1_u32;
+        let mut name = None;
 
         loop {
             let page_url = if page == 1 {
@@ -150,6 +143,9 @@ impl LetterboxdClient {
                 .error_for_status()
                 .with_context(|| format!("failed to fetch {page_url}"))?;
             let html = response.text().await?;
+            if page == 1 {
+                name = Some(parse_list_name(&html)?);
+            }
             let parsed = parse_films(&html)?;
             if parsed.is_empty() {
                 if page == 1 {
@@ -169,7 +165,10 @@ impl LetterboxdClient {
             }
             page += 1;
         }
-        Ok(films)
+        Ok(SourceList {
+            name: name.context("source list name was not found")?,
+            films,
+        })
     }
 
     pub async fn verify_session(&self, expected_username: &str) -> Result<()> {
@@ -217,18 +216,12 @@ impl LetterboxdClient {
         parse_target_list(&html).map(Some)
     }
 
-    pub async fn create_list(
-        &self,
-        name: &str,
-        published: bool,
-        ranked: bool,
-        films: &[Film],
-    ) -> Result<TargetList> {
+    pub async fn create_list(&self, name: &str, films: &[Film]) -> Result<TargetList> {
         let payload = CreateList {
-            published,
+            published: true,
             name,
             share_policy: "You",
-            ranked,
+            ranked: false,
             description: "",
             tags: vec![],
             entries: films
@@ -249,8 +242,6 @@ impl LetterboxdClient {
         &self,
         target: &TargetList,
         name: &str,
-        published: bool,
-        ranked: bool,
         films: &[Film],
     ) -> Result<TargetList> {
         let mut entries = Vec::with_capacity(films.len() + 1);
@@ -260,10 +251,10 @@ impl LetterboxdClient {
         }));
         let payload = UpdateList {
             version: target.version,
-            published,
+            published: true,
             name,
             share_policy: "You",
-            ranked,
+            ranked: false,
             description: "",
             tags: vec![],
             entries,
@@ -284,26 +275,23 @@ impl LetterboxdClient {
         payload: &T,
     ) -> Result<SavedList> {
         let method = reqwest::Method::from_bytes(method.as_bytes())?;
-        let mut request = self
+        let cookie = self
+            .cookie_header
+            .as_deref()
+            .context("Letterboxd session cookies are not configured")?;
+        let csrf = self
+            .csrf
+            .as_deref()
+            .context("Letterboxd CSRF cookie is not configured")?;
+        let request = self
             .http
             .request(method, format!("{API_BASE}{path}"))
             .header(header::ORIGIN, BASE)
             .header(header::REFERER, format!("{BASE}/"))
             .header(header::ACCEPT, "application/json")
+            .header(header::COOKIE, cookie)
+            .header("x-csrf-token", csrf)
             .json(payload);
-
-        if let Some(token) = &self.api_token {
-            request = request.bearer_auth(token);
-        } else {
-            let cookie = self
-                .cookie_header
-                .as_deref()
-                .context("set LETTERBOXD_API_TOKEN or both Letterboxd session-cookie secrets")?;
-            request = request.header(header::COOKIE, cookie);
-            if let Some(csrf) = &self.csrf {
-                request = request.header("x-csrf-token", csrf);
-            }
-        }
 
         let response = request.send().await?;
         let status = response.status();
@@ -388,6 +376,20 @@ fn parse_films(html: &str) -> Result<Vec<Film>> {
     Ok(films)
 }
 
+fn parse_list_name(html: &str) -> Result<String> {
+    let document = Html::parse_document(html);
+    let selector = Selector::parse(r#"meta[property="og:title"]"#)
+        .map_err(|error| anyhow!("invalid selector: {error}"))?;
+    document
+        .select(&selector)
+        .next()
+        .and_then(|element| element.value().attr("content"))
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .map(str::to_owned)
+        .context("source list has no Open Graph title")
+}
+
 fn has_next_page(html: &str) -> bool {
     let document = Html::parse_document(html);
     let selector = Selector::parse("a.next").expect("static selector is valid");
@@ -442,6 +444,12 @@ mod tests {
     }
 
     #[test]
+    fn parses_list_name() {
+        let html = r#"<meta property="og:title" content="a&amp;a: vampire season">"#;
+        assert_eq!(parse_list_name(html).unwrap(), "a&a: vampire season");
+    }
+
+    #[test]
     fn parses_logged_in_user() {
         let html = r#"person = { username: "Alice", loggedIn: true, role: "member" }"#;
         assert_eq!(parse_logged_in_username(html).as_deref(), Some("Alice"));
@@ -453,10 +461,5 @@ mod tests {
         let list = parse_target_list(html).unwrap();
         assert_eq!(list.lid, "abc123");
         assert_eq!(list.version, 7);
-    }
-
-    #[test]
-    fn test_client_constructor_is_available() {
-        let _ = LetterboxdClient::unauthenticated();
     }
 }
