@@ -24,8 +24,9 @@ you want to mirror. The target URL is derived from the username and name. A
 missing target is created on the first successful run. Later runs find it by
 name, so Letterboxd-generated slug suffixes do not create duplicates.
 
-Mirrored lists are always public and unranked. Their description links back to
-the source as `synced from <source URL>`.
+Mirrored lists are always public and unranked. The source description is copied,
+then `synced from <source URL>` is appended on a separate paragraph. If the
+source has no description, the sync line is the complete target description.
 
 ## Authentication
 
@@ -69,3 +70,8 @@ Letterboxd does not publish a supported personal automation API. The
 authenticated write path can change without notice. CI tests protect the
 parser and configuration, while every sync fails closed on authentication,
 ownership, version, or API errors.
+
+## Authorship
+
+This repository and all of its code were co-authored by Aleksei Shadrunov and
+Codex by OpenAI.

@@ -26,7 +26,7 @@ async fn main() -> Result<()> {
     let client = LetterboxdClient::from_env()?;
 
     for pair in &config.lists {
-        let films = client.fetch_public_list(&pair.source).await?;
+        let source = client.fetch_public_list(&pair.source).await?;
         let target_url = if args.dry_run {
             pair.target_url(&config.username)
         } else {
@@ -35,9 +35,18 @@ async fn main() -> Result<()> {
                 .await?
                 .unwrap_or_else(|| pair.target_url(&config.username))
         };
-        let description = format!("synced from {}", pair.source);
-        println!("{} -> {} ({} films)", pair.source, target_url, films.len());
-        for (index, film) in films.iter().enumerate() {
+        let description = if source.description.is_empty() {
+            format!("synced from {}", pair.source)
+        } else {
+            format!("{}\n\nsynced from {}", source.description, pair.source)
+        };
+        println!(
+            "{} -> {} ({} films)",
+            pair.source,
+            target_url,
+            source.films.len()
+        );
+        for (index, film) in source.films.iter().enumerate() {
             println!("{:>3}. {} [{}]", index + 1, film.name, film.slug);
         }
 
@@ -45,13 +54,13 @@ async fn main() -> Result<()> {
             match client.inspect_target(&target_url).await? {
                 Some(target) => {
                     client
-                        .replace_list(&target, &pair.target, &description, &films)
+                        .replace_list(&target, &pair.target, &description, &source.films)
                         .await?;
                     println!("Updated {target_url}");
                 }
                 None => {
                     let created = client
-                        .create_list(&pair.target, &description, &films)
+                        .create_list(&pair.target, &description, &source.films)
                         .await?;
                     println!("Created https://boxd.it/{}", created.lid);
                 }

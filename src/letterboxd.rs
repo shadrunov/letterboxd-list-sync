@@ -26,6 +26,12 @@ pub struct Film {
 }
 
 #[derive(Debug, Clone)]
+pub struct SourceList {
+    pub description: String,
+    pub films: Vec<Film>,
+}
+
+#[derive(Debug, Clone)]
 pub struct TargetList {
     pub lid: String,
     pub version: u64,
@@ -119,9 +125,10 @@ impl LetterboxdClient {
         })
     }
 
-    pub async fn fetch_public_list(&self, url: &Url) -> Result<Vec<Film>> {
+    pub async fn fetch_public_list(&self, url: &Url) -> Result<SourceList> {
         let mut films = Vec::new();
         let mut seen = HashSet::new();
+        let mut description = String::new();
         let mut page = 1_u32;
 
         loop {
@@ -138,6 +145,9 @@ impl LetterboxdClient {
                 .error_for_status()
                 .with_context(|| format!("failed to fetch {page_url}"))?;
             let html = response.text().await?;
+            if page == 1 {
+                description = parse_description(&html)?;
+            }
             let parsed = parse_films(&html)?;
             if parsed.is_empty() {
                 if page == 1 {
@@ -157,7 +167,7 @@ impl LetterboxdClient {
             }
             page += 1;
         }
-        Ok(films)
+        Ok(SourceList { description, films })
     }
 
     pub async fn inspect_target(&self, target_url: &Url) -> Result<Option<TargetList>> {
@@ -435,6 +445,28 @@ fn parse_films(html: &str) -> Result<Vec<Film>> {
     Ok(films)
 }
 
+fn parse_description(html: &str) -> Result<String> {
+    let document = Html::parse_document(html);
+    let description_selector = Selector::parse(".list-title-intro .body-text.-prose.-hero")
+        .map_err(|error| anyhow!("invalid selector: {error}"))?;
+    let paragraph_selector =
+        Selector::parse("p").map_err(|error| anyhow!("invalid selector: {error}"))?;
+    let Some(description) = document.select(&description_selector).next() else {
+        return Ok(String::new());
+    };
+
+    let paragraphs = description
+        .select(&paragraph_selector)
+        .map(|paragraph| paragraph.text().collect::<String>().trim().to_owned())
+        .filter(|paragraph| !paragraph.is_empty())
+        .collect::<Vec<_>>();
+    if paragraphs.is_empty() {
+        Ok(description.text().collect::<String>().trim().to_owned())
+    } else {
+        Ok(paragraphs.join("\n\n"))
+    }
+}
+
 fn has_next_page(html: &str) -> bool {
     let document = Html::parse_document(html);
     let selector = Selector::parse("a.next").expect("static selector is valid");
@@ -486,5 +518,26 @@ mod tests {
         let list = parse_target_list(html).unwrap();
         assert_eq!(list.lid, "abc123");
         assert_eq!(list.version, 7);
+    }
+
+    #[test]
+    fn parses_authored_description_in_paragraphs() {
+        let html = r#"
+<div class="list-title-intro">
+  <div class="body-text -prose -hero clear js-collapsible-text">
+    <p>First paragraph with <a href="https://example.com">a link</a>.</p>
+    <p>Second paragraph.</p>
+  </div>
+</div>
+"#;
+        assert_eq!(
+            parse_description(html).unwrap(),
+            "First paragraph with a link.\n\nSecond paragraph."
+        );
+    }
+
+    #[test]
+    fn missing_authored_description_is_empty() {
+        assert_eq!(parse_description("<html></html>").unwrap(), "");
     }
 }
