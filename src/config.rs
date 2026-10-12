@@ -6,13 +6,14 @@ use url::Url;
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
+    pub username: String,
     pub lists: Vec<ListPair>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct ListPair {
     pub source: Url,
-    pub target: Url,
+    pub target: String,
 }
 
 impl Config {
@@ -26,24 +27,51 @@ impl Config {
     }
 
     fn validate(&self) -> Result<()> {
+        if self.username.is_empty()
+            || !self.username.chars().all(|character| {
+                character.is_ascii_alphanumeric() || character == '-' || character == '_'
+            })
+        {
+            bail!("username must contain only letters, numbers, hyphens, and underscores");
+        }
         if self.lists.is_empty() {
             bail!("lists must contain at least one source/target pair");
         }
         for (index, pair) in self.lists.iter().enumerate() {
             validate_list_url(&pair.source, &format!("lists[{index}].source"))?;
-            validate_list_url(&pair.target, &format!("lists[{index}].target"))?;
+            if slugify(&pair.target).is_empty() {
+                bail!("lists[{index}].target must contain a list name");
+            }
         }
         Ok(())
     }
 }
 
 impl ListPair {
-    pub fn target_username(&self) -> &str {
-        self.target
-            .path_segments()
-            .and_then(|mut parts| parts.next())
-            .expect("validated target URL has a username")
+    pub fn target_url(&self, username: &str) -> Url {
+        Url::parse(&format!(
+            "https://letterboxd.com/{username}/list/{}/",
+            slugify(&self.target)
+        ))
+        .expect("validated username and target name form a URL")
     }
+}
+
+fn slugify(name: &str) -> String {
+    let mut slug = String::new();
+    let mut separator = false;
+    for character in name.chars() {
+        if character.is_ascii_alphanumeric() {
+            if separator && !slug.is_empty() {
+                slug.push('-');
+            }
+            slug.push(character.to_ascii_lowercase());
+            separator = false;
+        } else if character.is_ascii_whitespace() || character == '-' {
+            separator = true;
+        }
+    }
+    slug
 }
 
 fn validate_list_url(url: &Url, field: &str) -> Result<()> {
@@ -70,16 +98,20 @@ mod tests {
     fn parses_multiple_url_pairs() {
         let config: Config = serde_yaml::from_str(
             r#"
+username: shadrunov
 lists:
   - source: https://letterboxd.com/alice/list/one/
-    target: https://letterboxd.com/shadrunov/list/one/
+    target: First List
   - source: https://letterboxd.com/bob/list/two/
-    target: https://letterboxd.com/shadrunov/list/two/
+    target: "a&a: vampire season"
 "#,
         )
         .unwrap();
         config.validate().unwrap();
         assert_eq!(config.lists.len(), 2);
-        assert_eq!(config.lists[0].target_username(), "shadrunov");
+        assert_eq!(
+            config.lists[1].target_url(&config.username).as_str(),
+            "https://letterboxd.com/shadrunov/list/aa-vampire-season/"
+        );
     }
 }

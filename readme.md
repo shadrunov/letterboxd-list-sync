@@ -12,15 +12,16 @@ This repository is configured to mirror
 Edit [`config.yaml`](config.yaml):
 
 ```yaml
+username: shadrunov
+
 lists:
   - source: https://letterboxd.com/cokewithglitter/list/aa-vampire-season/
-    target: https://letterboxd.com/shadrunov/list/aa-vampire-season/
+    target: "a&a: vampire season"
 ```
 
-Add another `source`/`target` pair for each list you want to mirror. The URLs
-are the only identifiers: the target account is derived from its URL, and the
-target name is copied from the source. A missing target is created on the first
-successful run.
+Set `username` once, then add a `source` URL and target list name for every list
+you want to mirror. The target URL is derived from the username and name. A
+missing target is created on the first successful run.
 
 Mirrored lists are always public and unranked.
 
@@ -55,7 +56,7 @@ cargo run
 ```
 
 The dry run only reads the public source lists. The normal run validates that
-the session belongs to the account in each target URL before changing anything.
+the session belongs to `username` before changing anything.
 
 GitHub Actions runs at minute `17` of every hour and can also be started from
 the Actions tab. Concurrent runs are serialized.

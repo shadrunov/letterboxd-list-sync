@@ -21,12 +21,6 @@ pub struct Film {
 }
 
 #[derive(Debug, Clone)]
-pub struct SourceList {
-    pub name: String,
-    pub films: Vec<Film>,
-}
-
-#[derive(Debug, Clone)]
 pub struct TargetList {
     pub lid: String,
     pub version: u64,
@@ -123,11 +117,10 @@ impl LetterboxdClient {
         })
     }
 
-    pub async fn fetch_public_list(&self, url: &Url) -> Result<SourceList> {
+    pub async fn fetch_public_list(&self, url: &Url) -> Result<Vec<Film>> {
         let mut films = Vec::new();
         let mut seen = HashSet::new();
         let mut page = 1_u32;
-        let mut name = None;
 
         loop {
             let page_url = if page == 1 {
@@ -143,9 +136,6 @@ impl LetterboxdClient {
                 .error_for_status()
                 .with_context(|| format!("failed to fetch {page_url}"))?;
             let html = response.text().await?;
-            if page == 1 {
-                name = Some(parse_list_name(&html)?);
-            }
             let parsed = parse_films(&html)?;
             if parsed.is_empty() {
                 if page == 1 {
@@ -165,10 +155,7 @@ impl LetterboxdClient {
             }
             page += 1;
         }
-        Ok(SourceList {
-            name: name.context("source list name was not found")?,
-            films,
-        })
+        Ok(films)
     }
 
     pub async fn verify_session(&self, expected_username: &str) -> Result<()> {
@@ -376,20 +363,6 @@ fn parse_films(html: &str) -> Result<Vec<Film>> {
     Ok(films)
 }
 
-fn parse_list_name(html: &str) -> Result<String> {
-    let document = Html::parse_document(html);
-    let selector = Selector::parse(r#"meta[property="og:title"]"#)
-        .map_err(|error| anyhow!("invalid selector: {error}"))?;
-    document
-        .select(&selector)
-        .next()
-        .and_then(|element| element.value().attr("content"))
-        .map(str::trim)
-        .filter(|name| !name.is_empty())
-        .map(str::to_owned)
-        .context("source list has no Open Graph title")
-}
-
 fn has_next_page(html: &str) -> bool {
     let document = Html::parse_document(html);
     let selector = Selector::parse("a.next").expect("static selector is valid");
@@ -441,12 +414,6 @@ mod tests {
         assert_eq!(films.len(), 2);
         assert_eq!(films[0].lid, "2b34");
         assert_eq!(films[1].slug, "draculas-daughter");
-    }
-
-    #[test]
-    fn parses_list_name() {
-        let html = r#"<meta property="og:title" content="a&amp;a: vampire season">"#;
-        assert_eq!(parse_list_name(html).unwrap(), "a&a: vampire season");
     }
 
     #[test]

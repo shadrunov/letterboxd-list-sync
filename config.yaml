@@ -1,3 +1,5 @@
+username: shadrunov
+
 lists:
   - source: https://letterboxd.com/cokewithglitter/list/aa-vampire-season/
-    target: https://letterboxd.com/shadrunov/list/aa-vampire-season/
+    target: "a&a: vampire season"

@@ -26,29 +26,23 @@ async fn main() -> Result<()> {
     let client = LetterboxdClient::from_env()?;
 
     for pair in &config.lists {
-        let source = client.fetch_public_list(&pair.source).await?;
-        println!(
-            "{} -> {} ({} films)",
-            pair.source,
-            pair.target,
-            source.films.len()
-        );
-        for (index, film) in source.films.iter().enumerate() {
+        let films = client.fetch_public_list(&pair.source).await?;
+        let target_url = pair.target_url(&config.username);
+        println!("{} -> {} ({} films)", pair.source, target_url, films.len());
+        for (index, film) in films.iter().enumerate() {
             println!("{:>3}. {} [{}]", index + 1, film.name, film.slug);
         }
 
         if !args.dry_run {
-            client.verify_session(pair.target_username()).await?;
-            match client.inspect_target(&pair.target).await? {
+            client.verify_session(&config.username).await?;
+            match client.inspect_target(&target_url).await? {
                 Some(target) => {
-                    client
-                        .replace_list(&target, &source.name, &source.films)
-                        .await?;
-                    println!("Updated {}", pair.target);
+                    client.replace_list(&target, &pair.target, &films).await?;
+                    println!("Updated {target_url}");
                 }
                 None => {
-                    client.create_list(&source.name, &source.films).await?;
-                    println!("Created {}", pair.target);
+                    client.create_list(&pair.target, &films).await?;
+                    println!("Created {target_url}");
                 }
             }
         }
