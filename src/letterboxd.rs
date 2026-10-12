@@ -171,13 +171,18 @@ impl LetterboxdClient {
         parse_target_list(&html).map(Some)
     }
 
-    pub async fn create_list(&self, name: &str, films: &[Film]) -> Result<TargetList> {
+    pub async fn create_list(
+        &self,
+        name: &str,
+        description: &str,
+        films: &[Film],
+    ) -> Result<TargetList> {
         let payload = CreateList {
             published: true,
             name,
             share_policy: "You",
             ranked: false,
-            description: "",
+            description,
             tags: vec![],
             entries: films
                 .iter()
@@ -197,6 +202,7 @@ impl LetterboxdClient {
         &self,
         target: &TargetList,
         name: &str,
+        description: &str,
         films: &[Film],
     ) -> Result<TargetList> {
         let mut entries = Vec::with_capacity(films.len() + 1);
@@ -210,7 +216,7 @@ impl LetterboxdClient {
             name,
             share_policy: "You",
             ranked: false,
-            description: "",
+            description,
             tags: vec![],
             entries,
         };

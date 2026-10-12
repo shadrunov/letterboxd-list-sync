@@ -28,6 +28,7 @@ async fn main() -> Result<()> {
     for pair in &config.lists {
         let films = client.fetch_public_list(&pair.source).await?;
         let target_url = pair.target_url(&config.username);
+        let description = format!("synced from {}", pair.source);
         println!("{} -> {} ({} films)", pair.source, target_url, films.len());
         for (index, film) in films.iter().enumerate() {
             println!("{:>3}. {} [{}]", index + 1, film.name, film.slug);
@@ -36,11 +37,15 @@ async fn main() -> Result<()> {
         if !args.dry_run {
             match client.inspect_target(&target_url).await? {
                 Some(target) => {
-                    client.replace_list(&target, &pair.target, &films).await?;
+                    client
+                        .replace_list(&target, &pair.target, &description, &films)
+                        .await?;
                     println!("Updated {target_url}");
                 }
                 None => {
-                    client.create_list(&pair.target, &films).await?;
+                    client
+                        .create_list(&pair.target, &description, &films)
+                        .await?;
                     println!("Created {target_url}");
                 }
             }
