@@ -14,6 +14,7 @@ use serde_json::Value;
 use url::Url;
 
 const API_BASE: &str = "https://api.letterboxd.com/api/v0";
+const WEBSITE: &str = "https://letterboxd.com";
 const USER_AGENT: &str =
     "letterboxd-list-sync/0.1 (+https://github.com/shadrunov/letterboxd-list-sync)";
 
@@ -169,6 +170,42 @@ impl LetterboxdClient {
             bail!("failed to inspect {edit_url}: HTTP {status}");
         }
         parse_target_list(&html).map(Some)
+    }
+
+    pub async fn find_list_url(&self, username: &str, name: &str) -> Result<Option<Url>> {
+        let base = Url::parse(&format!("{WEBSITE}/{username}/lists/"))?;
+        let selector = Selector::parse("article.list-summary h2.name a[href]")
+            .map_err(|error| anyhow!("invalid selector: {error}"))?;
+        let mut page = 1_u32;
+
+        loop {
+            let page_url = if page == 1 {
+                base.clone()
+            } else {
+                base.join(&format!("page/{page}/"))?
+            };
+            let response = self.http.get(page_url.clone()).send().await?;
+            if response.status() == StatusCode::NOT_FOUND {
+                return Ok(None);
+            }
+            let html = response
+                .error_for_status()
+                .with_context(|| format!("failed to fetch {page_url}"))?
+                .text()
+                .await?;
+            let document = Html::parse_document(&html);
+            for link in document.select(&selector) {
+                let title = link.text().collect::<String>();
+                if title.trim().eq_ignore_ascii_case(name) {
+                    let href = link.value().attr("href").context("list link has no URL")?;
+                    return Ok(Some(base.join(href)?));
+                }
+            }
+            if !has_next_page(&html) {
+                return Ok(None);
+            }
+            page += 1;
+        }
     }
 
     pub async fn create_list(

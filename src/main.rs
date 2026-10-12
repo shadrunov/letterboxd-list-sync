@@ -27,7 +27,14 @@ async fn main() -> Result<()> {
 
     for pair in &config.lists {
         let films = client.fetch_public_list(&pair.source).await?;
-        let target_url = pair.target_url(&config.username);
+        let target_url = if args.dry_run {
+            pair.target_url(&config.username)
+        } else {
+            client
+                .find_list_url(&config.username, &pair.target)
+                .await?
+                .unwrap_or_else(|| pair.target_url(&config.username))
+        };
         let description = format!("synced from {}", pair.source);
         println!("{} -> {} ({} films)", pair.source, target_url, films.len());
         for (index, film) in films.iter().enumerate() {
@@ -43,10 +50,10 @@ async fn main() -> Result<()> {
                     println!("Updated {target_url}");
                 }
                 None => {
-                    client
+                    let created = client
                         .create_list(&pair.target, &description, &films)
                         .await?;
-                    println!("Created {target_url}");
+                    println!("Created https://boxd.it/{}", created.lid);
                 }
             }
         }

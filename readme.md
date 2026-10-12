@@ -21,7 +21,8 @@ lists:
 
 Set `username` once, then add a `source` URL and target list name for every list
 you want to mirror. The target URL is derived from the username and name. A
-missing target is created on the first successful run.
+missing target is created on the first successful run. Later runs find it by
+name, so Letterboxd-generated slug suffixes do not create duplicates.
 
 Mirrored lists are always public and unranked. Their description links back to
 the source as `synced from <source URL>`.
