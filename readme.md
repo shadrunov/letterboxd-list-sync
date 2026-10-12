@@ -1,11 +1,7 @@
 # Letterboxd List Syncer
 
 A small Rust service that mirrors a public Letterboxd list into a list owned by
-your account. GitHub Actions runs it every six hours. Additions, removals, and order
-changes in the source are copied to the target.
-
-This repository is configured to mirror
-[`cokewithglitter/a&a: vampire season`](https://letterboxd.com/cokewithglitter/list/aa-vampire-season/).
+your account. GitHub Actions runs it every six hours. Changes in the source are copied to the target.
 
 ## Configuration
 
@@ -24,9 +20,7 @@ you want to mirror. The target URL is derived from the username and name. A
 missing target is created on the first successful run. Later runs find it by
 name, so Letterboxd-generated slug suffixes do not create duplicates.
 
-Mirrored lists are always public and unranked. The source description is copied,
-then “synced from source user's list by letterboxd-list-syncer” is appended as a
-separate paragraph, with links to the source and this repository. If the source
+Mirrored lists are assumed to be public and unranked. The source description is copied with links to the source and this repository. If the source
 has no description, this credit is the complete target description.
 
 ## Authentication
