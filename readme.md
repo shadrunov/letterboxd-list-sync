@@ -1,9 +1,9 @@
-# Letterboxd List Syncer
+# <img src="https://a.ltrbxd.com/logos/letterboxd-decal-dots-pos-rgb.svg" alt="Letterboxd logo" width="28"> letterboxd list syncer
 
 A small Rust service that mirrors a public Letterboxd list into a list owned by
 your account. GitHub Actions runs it every six hours. Changes in the source are copied to the target.
 
-## Configuration
+## configuration
 
 Edit [`config.yaml`](config.yaml):
 
@@ -23,7 +23,7 @@ name, so Letterboxd-generated slug suffixes do not create duplicates.
 Mirrored lists are assumed to be public and unranked. The source description is copied with links to the source and this repository. If the source
 has no description, this credit is the complete target description.
 
-## Authentication
+## authentication
 
 Letterboxd's official API is request-only, and its access page says personal
 projects are not currently granted access. This service therefore uses your
@@ -46,7 +46,7 @@ Treat both values like a password. Do not paste them into an issue, commit, or
 workflow file. Logging out of Letterboxd revokes the session; update both
 secrets when it expires.
 
-## Run
+## run
 
 ```sh
 cargo run -- --dry-run
@@ -59,14 +59,14 @@ cookies to create or update lists owned by `username`.
 GitHub Actions runs every six hours at minute `17` (UTC) and can also be started
 from the Actions tab. Concurrent runs are serialized.
 
-## Caveat
+## caveat
 
 Letterboxd does not publish a supported personal automation API. The
 authenticated write path can change without notice. CI tests protect the
 parser and configuration, while every sync fails closed on authentication,
 ownership, version, or API errors.
 
-## Authorship
+## authorship
 
 This repository and all of its code were co-authored by Aleksei Shadrunov and
 Codex by OpenAI.
